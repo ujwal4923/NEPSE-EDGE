@@ -243,3 +243,29 @@ except Exception as e:
         "Please try again later. The external data "
         "source may be temporarily unavailable."
     )
+
+# MARKET BREADTH OVERVIEW
+if "df" in globals() and not df.empty:
+    st.divider()
+    st.subheader("🌐 Market Overview")
+
+    if "percent_change" in df.columns:
+        advances = int((df["percent_change"] > 0).sum())
+        declines = int((df["percent_change"] < 0).sum())
+        unchanged = int((df["percent_change"] == 0).sum())
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Advances", advances)
+        c2.metric("Declines", declines)
+        c3.metric("Unchanged", unchanged)
+
+        breadth = pd.DataFrame({
+            "Market Status": ["Advances", "Declines", "Unchanged"],
+            "Securities": [advances, declines, unchanged]
+        }).set_index("Market Status")
+
+        st.bar_chart(breadth)
+    else:
+        st.info("Change percentage data is not available.")
+
+    st.caption("Based on available market data. Security classification may be incomplete.")
