@@ -1,156 +1,245 @@
 
 import streamlit as st
 import pandas as pd
+import urllib.request
+import json
 
-# PAGE SETTINGS
 st.set_page_config(
     page_title="NEPSE EDGE",
     page_icon="📈",
     layout="wide"
 )
 
-# HEADER
+BASE = "https://raw.githubusercontent.com/Shubhamnpk/yonepse/main/data"
+
+@st.cache_data(ttl=300)
+def get_data(path):
+    url = BASE + "/" + path
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "NEPSE-EDGE"}
+    )
+    with urllib.request.urlopen(req, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
 st.title("📈 NEPSE EDGE")
-st.caption("Smart Stock Analysis & Market Intelligence")
+st.caption("Full NEPSE Market Intelligence & Stock Scanner")
 
 st.info(
-    "DEMO MODE: This is the first dashboard. "
-    "Live NEPSE data will be connected in the next phase."
+    "Data source: YONEPSE public data mirror. "
+    "Not an official NEPSE application."
 )
 
-# SIDEBAR
-st.sidebar.title("NEPSE EDGE")
-page = st.sidebar.selectbox(
-    "Select Module",
-    [
-        "Dashboard",
-        "Stock Scanner",
-        "Technical Analysis",
-        "Fundamental Analysis",
-        "Broker Intelligence",
-        "My Portfolio"
-    ]
-)
+try:
+    data = get_data("nepse_data.json")
 
-st.sidebar.markdown("---")
-st.sidebar.caption("Version 1.0 | Development")
-
-# DASHBOARD
-if page == "Dashboard":
-
-    st.subheader("Market Overview")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("NEPSE Index", "DEMO", "Not connected")
-    col2.metric("Turnover", "DEMO", "Not connected")
-    col3.metric("Total Volume", "DEMO", "Not connected")
-    col4.metric("Market Status", "Pending", "Data connection")
-
-    st.markdown("---")
-
-    st.subheader("📊 Market Watchlist")
-
-    data = {
-        "Symbol": ["SAHAS", "NGPL", "PHCL", "LEC"],
-        "Buy Price": [668, 409, 328, 237],
-        "Note": [
-            "Demo portfolio",
-            "Demo portfolio",
-            "Demo portfolio",
-            "Demo portfolio"
-        ]
-    }
+    if not isinstance(data, list) or len(data) == 0:
+        st.error("Market data is empty or unavailable.")
+        st.stop()
 
     df = pd.DataFrame(data)
 
+    # Load security information
+    try:
+        securities = get_data("other/securities.json")
+        sec = pd.DataFrame(securities)
+
+        if "symbol" in sec.columns:
+            keep = ["symbol"]
+            for col in ["instrumentType", "sectorName", "status"]:
+                if col in sec.columns:
+                    keep.append(col)
+
+            sec = sec[keep].drop_duplicates("symbol")
+            df = df.merge(sec, on="symbol", how="left")
+
+    except Exception:
+        st.warning(
+            "Security classification unavailable. "
+            "Showing available market records."
+        )
+
+    # Remove open-ended mutual fund records
+    if "asset_type" in df.columns:
+        df = df[
+            df["asset_type"].astype(str).str.lower()
+            != "open_ended_mutual_fund"
+        ]
+
+    # Prefer ordinary equity securities
+    if "instrumentType" in df.columns:
+        equity = df[
+            df["instrumentType"].astype(str).str.lower()
+            == "equity"
+        ]
+        if not equity.empty:
+            df = equity
+
+    # Convert numerical columns
+    numeric = [
+        "ltp", "change", "percent_change",
+        "volume", "turnover", "high", "low"
+    ]
+
+    for col in numeric:
+        if col in df.columns:
+            df[col] = pd.to_numeric(
+                df[col], errors="coerce"
+            )
+
+    if "symbol" in df.columns:
+        df = df.drop_duplicates("symbol")
+
+    st.success(
+        f"Market data loaded: {len(df)} securities"
+    )
+
+    # Market overview
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric("Listed Securities", len(df))
+
+    if "volume" in df.columns:
+        c2.metric(
+            "Total Volume",
+            f"{df['volume'].fillna(0).sum():,.0f}"
+        )
+
+    if "turnover" in df.columns:
+        c3.metric(
+            "Total Turnover",
+            f"Rs. {df['turnover'].fillna(0).sum():,.0f}"
+        )
+
+    st.divider()
+
+    # Search
+    st.subheader("🔎 Smart Stock Scanner")
+
+    search = st.text_input(
+        "Search Company or Symbol",
+        placeholder="Example: NABIL"
+    )
+
+    filtered = df.copy()
+
+    if search:
+        mask = (
+            filtered["symbol"].astype(str).str.contains(
+                search, case=False, na=False
+            )
+            |
+            filtered["name"].astype(str).str.contains(
+                search, case=False, na=False
+            )
+        )
+        filtered = filtered[mask]
+
+    # Sector filter
+    if "sectorName" in filtered.columns:
+        sectors = sorted(
+            filtered["sectorName"].dropna().unique().tolist()
+        )
+        if sectors:
+            selected = st.selectbox(
+                "Select Sector",
+                ["All Sectors"] + sectors
+            )
+            if selected != "All Sectors":
+                filtered = filtered[
+                    filtered["sectorName"] == selected
+                ]
+
+    # Sort
+    sort_options = {
+        "Top Gainers": "percent_change",
+        "Top Losers": "percent_change",
+        "Highest Volume": "volume",
+        "Highest Turnover": "turnover"
+    }
+
+    sort_choice = st.selectbox(
+        "Sort Market Data",
+        list(sort_options.keys())
+    )
+
+    if sort_choice == "Top Losers":
+        filtered = filtered.sort_values(
+            "percent_change", ascending=True,
+            na_position="last"
+        )
+    else:
+        filtered = filtered.sort_values(
+            sort_options[sort_choice],
+            ascending=False,
+            na_position="last"
+        )
+
+    columns = [
+        "symbol", "name", "ltp", "change",
+        "percent_change", "volume", "turnover"
+    ]
+
+    if "sectorName" in filtered.columns:
+        columns.append("sectorName")
+
+    columns = [
+        c for c in columns if c in filtered.columns
+    ]
+
     st.dataframe(
-        df,
+        filtered[columns],
         use_container_width=True,
         hide_index=True
     )
 
-    st.markdown("---")
+    # Top gainers and losers
+    st.divider()
+    st.subheader("📊 Market Opportunities")
 
-    st.subheader("📈 Stock Scanner")
+    if "percent_change" in df.columns:
+        left, right = st.columns(2)
 
-    st.write(
-        "Our future scanner will analyze all NEPSE stocks "
-        "using trend, momentum, volume and broker activity."
-    )
-
-    st.warning(
-        "BUY and SELL signals are not active yet. "
-        "We will enable them only after connecting and testing real data."
-    )
-
-# STOCK SCANNER
-elif page == "Stock Scanner":
-
-    st.subheader("🔍 Smart Stock Scanner")
-
-    st.write("Find stocks with strong market potential.")
-
-    st.info("Scanner will be activated after live data integration.")
-
-# TECHNICAL ANALYSIS
-elif page == "Technical Analysis":
-
-    st.subheader("📉 Technical Analysis")
-
-    symbol = st.text_input(
-        "Enter NEPSE Symbol",
-        placeholder="Example: NGPL"
-    )
-
-    if st.button("Analyze Stock"):
-        if symbol:
-            st.info(
-                "Technical analysis will be available "
-                "after historical price data integration."
+        with left:
+            st.markdown("**Top 10 Gainers**")
+            st.dataframe(
+                df.nlargest(10, "percent_change")[
+                    ["symbol", "ltp", "percent_change"]
+                ],
+                use_container_width=True,
+                hide_index=True
             )
-        else:
-            st.warning("Please enter a stock symbol.")
 
-# FUNDAMENTAL ANALYSIS
-elif page == "Fundamental Analysis":
+        with right:
+            st.markdown("**Top 10 Losers**")
+            st.dataframe(
+                df.nsmallest(10, "percent_change")[
+                    ["symbol", "ltp", "percent_change"]
+                ],
+                use_container_width=True,
+                hide_index=True
+            )
 
-    st.subheader("🏢 Fundamental Analysis")
+    if "last_updated" in df.columns:
+        st.caption(
+            "Source data timestamp: "
+            + str(df["last_updated"].max())
+        )
 
-    st.write("Company financial health and valuation.")
-
-    st.info(
-        "EPS, P/E, ROE, debt and quarterly profit "
-        "analysis will be added in the next phase."
+    st.caption(
+        "Data is provided by a third-party community source. "
+        "It may be delayed or incomplete. Verify prices "
+        "before making investment decisions."
     )
 
-# BROKER INTELLIGENCE
-elif page == "Broker Intelligence":
+    if st.button("🔄 Refresh Market Data"):
+        st.cache_data.clear()
+        st.rerun()
 
-    st.subheader("🏦 Broker Intelligence")
-
-    st.write("Floorsheet and broker transaction analysis.")
-
+except Exception as e:
+    st.error("Unable to load market data.")
+    st.write("Technical details:", str(e))
     st.info(
-        "Broker-wise net buying, net selling "
-        "and accumulation tracking will be added."
+        "Please try again later. The external data "
+        "source may be temporarily unavailable."
     )
-
-# PORTFOLIO
-elif page == "My Portfolio":
-
-    st.subheader("💼 My Portfolio")
-
-    st.write("Track your stock investments.")
-
-    st.info(
-        "Portfolio profit, loss, average cost "
-        "and target tracking will be developed here."
-    )
-
-# FOOTER
-st.markdown("---")
-st.caption(
-    "NEPSE EDGE | Personal Stock Research Platform | "
-    "Built for data-driven trading"
-)
