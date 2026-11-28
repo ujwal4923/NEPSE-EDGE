@@ -310,3 +310,79 @@ try:
 
 except Exception as e:
     st.warning("NEPSE Index data is temporarily unavailable.")
+
+
+
+# SECTOR-WISE MARKET ANALYSIS
+try:
+    sector_data = get_data("other/sector_codes.json")
+
+    st.divider()
+    st.header("🏭 Sector-wise Analysis")
+
+    sector_rows = []
+
+    for sector, members in sector_data.items():
+        symbols = [
+            item.get("symbol")
+            for item in members
+            if isinstance(item, dict) and item.get("symbol")
+        ]
+
+        sector_stocks = df[df["symbol"].isin(symbols)].copy()
+
+        if not sector_stocks.empty:
+            sector_stocks["percent_change"] = pd.to_numeric(
+                sector_stocks["percent_change"], errors="coerce"
+            )
+            sector_stocks["turnover"] = pd.to_numeric(
+                sector_stocks["turnover"], errors="coerce"
+            )
+            sector_stocks["volume"] = pd.to_numeric(
+                sector_stocks["volume"], errors="coerce"
+            )
+
+            changes = sector_stocks["percent_change"].dropna()
+
+            sector_rows.append({
+                "Sector": sector,
+                "Companies": len(sector_stocks),
+                "Average Change (%)": round(changes.mean(), 2)
+                    if not changes.empty else 0,
+                "Advances": int((changes > 0).sum()),
+                "Declines": int((changes < 0).sum()),
+                "Turnover": sector_stocks["turnover"].sum(),
+                "Volume": sector_stocks["volume"].sum()
+            })
+
+    if sector_rows:
+        sector_df = pd.DataFrame(sector_rows)
+        sector_df = sector_df.sort_values(
+            "Average Change (%)", ascending=False
+        )
+
+        st.caption(
+            "Sector performance is calculated from the "
+            "average percentage change of available constituent stocks. "
+            "It is not the official weighted sector index."
+        )
+
+        st.dataframe(
+            sector_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.subheader("Sector Performance Comparison")
+        chart_data = sector_df.set_index("Sector")[
+            "Average Change (%)"
+        ]
+        st.bar_chart(chart_data)
+
+    else:
+        st.warning("Sector data is currently unavailable.")
+
+except Exception as e:
+    st.warning("Unable to load Sector Analysis.")
+    st.write("Technical details:", str(e))
+    
