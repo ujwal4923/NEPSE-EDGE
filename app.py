@@ -1,1214 +1,310 @@
-
 import streamlit as st
 import pandas as pd
-import urllib.request
-import json
+import requests
+import numpy as np
+import plotly.graph_objects as go
+from datetime import date
+from supabase import create_client
 
-# ============================================================
-# NEPSE EDGE | COMPLETE APP
-# Original mobile home design preserved
-# ============================================================
-
-st.set_page_config(
-    page_title="NEPSE EDGE",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
+st.set_page_config(page_title="NEPSE EDGE", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 BASE = "https://raw.githubusercontent.com/Shubhamnpk/yonepse/main/data"
 
-# ============================================================
-# ORIGINAL HOME DESIGN - PRESERVED
-# ============================================================
-
+# Keep the original NEPSE EDGE home-card dimensions and two-column layout.
 st.markdown("""
 <style>
-
-/* Main page */
-.stApp {
-    width: 100%;
-}
-
-.block-container {
-    max-width: 100% !important;
-    padding: 1rem 0.65rem 2rem 0.65rem !important;
-}
-
-/* Header */
-.edge-header {
-    text-align: center;
-    padding: 8px 0 20px 0;
-}
-
-.edge-logo {
-    font-size: 38px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    color: #2196F3;
-}
-
-.edge-subtitle {
-    font-size: 12px;
-    letter-spacing: 1.5px;
-    color: #999999;
-    margin-top: 4px;
-}
-
-/* Section heading */
-.section-heading {
-    font-size: 19px;
-    font-weight: 800;
-    margin: 8px 0 14px 3px;
-}
-
-/* Force two columns on mobile */
-div[data-testid="stHorizontalBlock"] {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    gap: 10px !important;
-    width: 100% !important;
-}
-
-div[data-testid="column"] {
-    width: 50% !important;
-    min-width: 0 !important;
-    flex: 1 1 50% !important;
-}
-
-/* Equal size dashboard boxes */
-div.stButton > button {
-    width: 100% !important;
-    height: 116px !important;
-    min-height: 116px !important;
-    max-height: 116px !important;
-    border-radius: 16px !important;
-    border: 1px solid #64748b !important;
-    background: rgba(100, 116, 139, 0.09) !important;
-    font-size: 15px !important;
-    font-weight: 800 !important;
-    line-height: 1.5 !important;
-    white-space: pre-line !important;
-    text-align: center !important;
-    padding: 8px 3px !important;
-    overflow-wrap: anywhere !important;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
-}
-
-/* Hover and touch */
-div.stButton > button:hover {
-    border: 2px solid #2196F3 !important;
-    color: #2196F3 !important;
-    transform: translateY(-2px);
-}
-
-/* Footer */
-.edge-footer {
-    text-align: center;
-    font-size: 11px;
-    color: #888888;
-    padding: 20px 0;
-}
-
-/* Small mobile screens */
-@media (max-width: 380px) {
-    .block-container {
-        padding-left: 0.4rem !important;
-        padding-right: 0.4rem !important;
-    }
-
-    div[data-testid="stHorizontalBlock"] {
-        gap: 7px !important;
-    }
-
-    div.stButton > button {
-        height: 108px !important;
-        min-height: 108px !important;
-        max-height: 108px !important;
-        font-size: 13px !important;
-    }
-
-    .edge-logo {
-        font-size: 32px;
-    }
-}
-
-/* Additional content styling - does not change home boxes */
-.edge-card {
-    background: rgba(100,116,139,0.10);
-    border: 1px solid #64748b;
-    border-radius: 13px;
-    padding: 13px;
-    margin-bottom: 10px;
-}
-
-.edge-positive {
-    color: #16a34a;
-    font-weight: 700;
-}
-
-.edge-negative {
-    color: #ef4444;
-    font-weight: 700;
-}
-
-.edge-muted {
-    color: #94a3b8;
-    font-size: 12px;
-}
-
-.edge-heading {
-    font-size: 19px;
-    font-weight: 800;
-    margin-top: 18px;
-    margin-bottom: 10px;
-}
-
+.stApp {width:100%;}
+.block-container {max-width:100% !important;padding:1rem .65rem 2rem .65rem !important;}
+.edge-header{text-align:center;padding:8px 0 20px;}
+.edge-logo{font-size:38px;font-weight:900;letter-spacing:2px;color:#2196F3;}
+.edge-subtitle{font-size:12px;letter-spacing:1.5px;color:gray;}
+.section-heading{font-size:19px;font-weight:800;margin:12px 0;}
+div[data-testid="stHorizontalBlock"]{display:flex!important;flex-wrap:nowrap!important;gap:10px!important;width:100%!important;}
+div[data-testid="column"]{width:50%!important;min-width:0!important;flex:1 1 50%!important;}
+div.stButton>button{width:100%;height:116px;min-height:116px;max-height:116px;border-radius:16px;border:1px solid #64748b;background:rgba(100,116,139,.09);font-size:15px;font-weight:800;line-height:1.5;white-space:pre-line;text-align:center;padding:8px 3px;overflow-wrap:anywhere;box-shadow:0 2px 7px rgba(0,0,0,.08);}
+div.stButton>button:hover{border:2px solid #2196F3;color:#2196F3;transform:translateY(-2px);}
+.edge-footer{text-align:center;font-size:11px;color:gray;padding:20px 0;}
+.small-note{font-size:12px;color:gray;}
+@media(max-width:380px){.block-container{padding-left:.4rem!important;padding-right:.4rem!important;}div[data-testid="stHorizontalBlock"]{gap:7px!important;}div.stButton>button{height:108px;min-height:108px;max-height:108px;font-size:13px;}.edge-logo{font-size:32px;}}
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# MODULES - ORIGINAL TITLES PRESERVED
-# ============================================================
+@st.cache_data(ttl=300, show_spinner=False)
+def get_json(path):
+    r=requests.get(f"{BASE}/{path}", timeout=18, headers={"User-Agent":"NEPSE-EDGE/1.0"})
+    r.raise_for_status(); return r.json()
 
-pages = [
-    ("📊\nMARKET DASHBOARD", "Market Dashboard"),
-    ("🔍\nSTOCK SCANNER", "Stock Scanner"),
-    ("🏢\nSECTOR EXPLORER", "Sector Explorer"),
-    ("📚\nFUNDAMENTAL ANALYSIS", "Fundamental Analysis"),
-    ("📈\nTECHNICAL ANALYSIS", "Technical Analysis"),
-    ("📰\nNEWS INTELLIGENCE", "News Intelligence"),
-    ("🧠\nSMART RECOMMENDATIONS", "Smart Recommendations"),
-    ("💼\nWATCHLIST & PORTFOLIO", "Watchlist & Portfolio")
-]
-
-if "page" not in st.session_state:
-    st.session_state.page = "Home"
-
-# ============================================================
-# DATA FUNCTIONS
-# ============================================================
-
-def fetch_json(path):
-    url = BASE + "/" + path
-
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "NEPSE-EDGE"}
-    )
-
-    with urllib.request.urlopen(request, timeout=25) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-@st.cache_data(ttl=300)
 def load_market():
-    return pd.DataFrame(fetch_json("nepse_data.json"))
+    problems=[]
+    try: prices=get_json("nepse_data.json")
+    except Exception as e: prices=[]; problems.append(f"Price feed: {e}")
+    try: securities=get_json("other/securities.json")
+    except Exception as e: securities=[]; problems.append(f"Securities: {e}")
+    try: indices=get_json("market/indices.json")
+    except Exception as e: indices=[]; problems.append(f"Indices: {e}")
+    try: summary=get_json("market/summary.json")
+    except Exception as e: summary=[]; problems.append(f"Summary: {e}")
+    try: tops=get_json("market/top_stocks.json")
+    except Exception as e: tops={}; problems.append(f"Top stocks: {e}")
+    p=pd.DataFrame(prices if isinstance(prices,list) else [])
+    s=pd.DataFrame(securities if isinstance(securities,list) else [])
+    if not p.empty and not s.empty and 'symbol' in p and 'symbol' in s:
+        if 'instrumentType' in s: s=s[s.instrumentType.astype(str).str.lower().eq('equity')]
+        if 'status' in s: s=s[s.status.astype(str).str.upper().eq('A')]
+        keep=[c for c in ['symbol','companyName','sectorName'] if c in s.columns]
+        df=p.merge(s[keep].drop_duplicates('symbol'),on='symbol',how='inner')
+    else: df=p.copy()
+    for c in ['ltp','previous_close','change','percent_change','high','low','volume','turnover','trades','market_cap']:
+        if c in df: df[c]=pd.to_numeric(df[c],errors='coerce')
+    return df,indices,summary,tops,problems
 
+def fmt(v):
+    try:return f"{float(v):,.2f}"
+    except:return "—"
 
-@st.cache_data(ttl=300)
-def load_indices():
-    return pd.DataFrame(fetch_json("market/indices.json"))
+def metric(label,value,delta=None):
+    st.metric(label,value,delta)
 
-
-@st.cache_data(ttl=300)
-def load_summary():
-    return pd.DataFrame(fetch_json("market/summary.json"))
-
-
-@st.cache_data(ttl=300)
-def load_securities():
-    return pd.DataFrame(fetch_json("other/securities.json"))
-
-
-@st.cache_data(ttl=300)
-def load_top_stocks():
-    return fetch_json("market/top_stocks.json")
-
-
-def prepare_market():
-    market = load_market()
-    securities = load_securities()
-
-    numeric = [
-        "ltp", "previous_close", "change",
-        "percent_change", "high", "low",
-        "volume", "turnover", "trades", "market_cap"
-    ]
-
-    for col in numeric:
-        if col in market.columns:
-            market[col] = pd.to_numeric(
-                market[col], errors="coerce"
-            )
-
-    if "symbol" in securities.columns:
-        selected = [
-            c for c in [
-                "symbol", "sectorName",
-                "instrumentType", "status",
-                "companyName", "securityName"
-            ]
-            if c in securities.columns
-        ]
-
-        securities = securities[selected].drop_duplicates("symbol")
-
-        market = market.merge(
-            securities,
-            on="symbol",
-            how="left"
-        )
-
-    if "sectorName" not in market.columns:
-        market["sectorName"] = "Unclassified"
-
-    market["sectorName"] = market["sectorName"].fillna("Unclassified")
-
-    if "instrumentType" in market.columns:
-        equity = market[
-            market["instrumentType"].astype(str).str.lower() == "equity"
-        ]
-    else:
-        equity = market.copy()
-
-    if "status" in equity.columns:
-        active = equity[
-            equity["status"].astype(str).str.upper() == "A"
-        ]
-        if not active.empty:
-            equity = active
-
-    equity = equity.drop_duplicates("symbol").copy()
-
-    return market, equity
-
-
-def safe_num(value):
+def supabase_client():
     try:
-        return float(value)
-    except (ValueError, TypeError):
-        return 0.0
+        url=st.secrets.get("SUPABASE_URL","")
+        key=st.secrets.get("SUPABASE_KEY","")
+        if url and key: return create_client(url,key)
+    except Exception: pass
+    return None
 
+sb=supabase_client()
 
-def fmt(value):
-    return f"{safe_num(value):,.2f}"
-
-
-def compact(value):
-    value = safe_num(value)
-
-    if abs(value) >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.2f} B"
-
-    if abs(value) >= 1_000_000:
-        return f"{value / 1_000_000:.2f} M"
-
-    if abs(value) >= 1_000:
-        return f"{value / 1_000:,.2f} K"
-
-    return f"{value:,.2f}"
-
-
-def money(value):
-    return "Rs. " + compact(value)
-
-
-def summary_value(summary, keyword):
-    if summary.empty or "detail" not in summary.columns:
+def portfolio_login():
+    if not sb:
+        st.error("Supabase secrets भेटिएनन्। Streamlit Secrets मा SUPABASE_URL र SUPABASE_KEY जाँच्नुहोस्।")
         return None
+    if st.session_state.get("sb_access") and st.session_state.get("sb_refresh"):
+        try:
+            sb.auth.set_session(st.session_state.sb_access,st.session_state.sb_refresh)
+            return st.session_state.get("sb_user")
+        except Exception:
+            st.session_state.pop("sb_access",None); st.session_state.pop("sb_refresh",None)
+    st.write("Portfolio सुरक्षित गर्न आफ्नो email बाट OTP login गर्नुहोस्।")
+    email=st.text_input("Email address",key="portfolio_email")
+    if st.button("Send login code"):
+        try:
+            sb.auth.sign_in_with_otp({"email":email})
+            st.session_state["otp_email"]=email
+            st.success("Email मा आएको OTP code हेर्नुहोस्।")
+        except Exception as e: st.error(f"OTP पठाउन सकिएन: {e}")
+    if st.session_state.get("otp_email"):
+        otp=st.text_input("Email OTP code",key="portfolio_otp")
+        if st.button("Verify OTP"):
+            try:
+                res=sb.auth.verify_otp({"email":st.session_state.otp_email,"token":otp,"type":"email"})
+                st.session_state["sb_access"]=res.session.access_token
+                st.session_state["sb_refresh"]=res.session.refresh_token
+                st.session_state["sb_user"]=res.user.id
+                st.rerun()
+            except Exception as e: st.error(f"OTP verify भएन: {e}")
+    return None
 
-    found = summary[
-        summary["detail"].astype(str).str.contains(
-            keyword, case=False, na=False
-        )
-    ]
+def get_transactions(user_id):
+    try:
+        return sb.table("portfolio_transactions").select("*").eq("user_id",user_id).order("transaction_date").execute().data or []
+    except Exception as e:
+        st.error(f"Portfolio पढ्न सकिएन: {e}"); return []
 
-    if found.empty:
-        return None
+PAGES=["📊 MARKET DASHBOARD","🔍 STOCK SCANNER","🏢 SECTOR EXPLORER","📚 FUNDAMENTAL ANALYSIS","📈 TECHNICAL ANALYSIS","📰 NEWS INTELLIGENCE","🧠 SMART RECOMMENDATIONS","💼 WATCHLIST & PORTFOLIO"]
+if 'page' not in st.session_state: st.session_state.page="Home"
+if 'watch' not in st.session_state: st.session_state.watch=[]
 
-    return safe_num(found.iloc[0].get("value"))
+df,indices,summary,tops,errors=load_market()
 
-
-def get_index(indices, name):
-    if indices.empty or "index" not in indices.columns:
-        return None
-
-    found = indices[
-        indices["index"].astype(str).str.lower() == name.lower()
-    ]
-
-    if found.empty:
-        return None
-
-    return found.iloc[0]
-
-
-def show_table(data, columns, height=350):
-    if data is None or data.empty:
-        st.info("Data is currently unavailable.")
-        return
-
-    available = [c for c in columns if c in data.columns]
-
-    if not available:
-        st.info("Requested information is unavailable.")
-        return
-
-    st.dataframe(
-        data[available],
-        use_container_width=True,
-        hide_index=True,
-        height=height
-    )
-
-
-def market_timestamp(market, indices):
-    if not indices.empty and "generatedTime" in indices.columns:
-        value = indices.iloc[0]["generatedTime"]
-        return str(value)
-
-    if "last_updated" in market.columns:
-        dates = pd.to_datetime(
-            market["last_updated"], errors="coerce"
-        ).dropna()
-
-        if not dates.empty:
-            return dates.max().strftime("%Y-%m-%d %H:%M:%S")
-
-    return "Not available"
-
-
-def back_home():
-    if st.button("⬅ HOME", key="back_home"):
-        st.session_state.page = "Home"
-        st.rerun()
-
-
-def company_details(df, key):
-    if df.empty:
-        return
-
-    options = df["symbol"].astype(str).tolist()
-
-    selected = st.selectbox(
-        "Select company",
-        options,
-        key=key
-    )
-
-    company = df[df["symbol"].astype(str) == selected].iloc[0]
-
-    st.markdown("### " + str(company.get("name", selected)))
-
-    a, b, c = st.columns(3)
-
-    a.metric("LTP", fmt(company.get("ltp")))
-    b.metric("Change", fmt(company.get("change")))
-    c.metric(
-        "Change %",
-        f"{safe_num(company.get('percent_change')):.2f}%"
-    )
-
-    details = {
-        "Symbol": company.get("symbol"),
-        "Company": company.get("name"),
-        "Sector": company.get("sectorName"),
-        "LTP": company.get("ltp"),
-        "Previous Close": company.get("previous_close"),
-        "Change": company.get("change"),
-        "Change (%)": company.get("percent_change"),
-        "Day High": company.get("high"),
-        "Day Low": company.get("low"),
-        "Volume": company.get("volume"),
-        "Turnover": company.get("turnover"),
-        "Trades": company.get("trades"),
-        "Market Capitalization": company.get("market_cap")
-    }
-
-    st.table(
-        pd.DataFrame(
-            details.items(),
-            columns=["Information", "Value"]
-        )
-    )
-
-# ============================================================
-# HEADER - ORIGINAL DESIGN
-# ============================================================
-
-st.markdown("""
-<div class="edge-header">
-    <div class="edge-logo">📈 NEPSE EDGE</div>
-    <div class="edge-subtitle">
-        NEPAL STOCK MARKET INTELLIGENCE
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# SIDEBAR NAVIGATION
-# ============================================================
-
+st.markdown('<div class="edge-header"><div class="edge-logo">NEPSE EDGE</div><div class="edge-subtitle">NEPAL STOCK MARKET INTELLIGENCE</div></div>',unsafe_allow_html=True)
 with st.sidebar:
+    st.title("NEPSE EDGE")
+    if st.button("🏠 HOME",use_container_width=True): st.session_state.page="Home"
+    for p in PAGES:
+        if st.button(p,use_container_width=True): st.session_state.page=p
+    st.caption("Public YONEPSE mirror • Not official NEPSE data")
 
-    st.markdown("## 📈 NEPSE EDGE")
-    st.caption("MAIN NAVIGATION")
-    st.divider()
+# helpers
+symbols=sorted(df.symbol.dropna().astype(str).unique().tolist()) if not df.empty and 'symbol' in df else []
+def stock_picker(key="stock"):
+    if not symbols: st.warning("Company list is currently unavailable."); return None
+    return st.selectbox("कम्पनी / Symbol खोज्नुहोस्",symbols,key=key)
+def selected_row(sym):
+    if df.empty:return None
+    x=df[df.symbol.astype(str)==str(sym)]
+    return x.iloc[0] if not x.empty else None
+def show_stock_overview(sym):
+    r=selected_row(sym)
+    if r is None: st.warning("यस कम्पनीको मूल्य डाटा उपलब्ध छैन।"); return
+    name=r.get('companyName',r.get('name',sym)); st.subheader(f"{name} ({sym})")
+    c1,c2,c3,c4=st.columns(4)
+    c1.metric("LTP",fmt(r.get('ltp'))); c2.metric("Change",fmt(r.get('change')),f"{fmt(r.get('percent_change'))}%")
+    c3.metric("Volume",fmt(r.get('volume'))); c4.metric("Turnover",fmt(r.get('turnover')))
+    st.caption(f"Sector: {r.get('sectorName','Not available')} • Updated: {r.get('last_updated','Timestamp unavailable')}")
 
-    if st.button("🏠 HOME", use_container_width=True):
-        st.session_state.page = "Home"
-        st.rerun()
+def get_summary(label):
+    for x in summary if isinstance(summary,list) else []:
+        d=str(x.get('detail','')).lower()
+        if label.lower() in d:return x.get('value','—')
+    return '—'
 
-    for label, page in pages:
-        if st.button(
-            label,
-            key="menu_" + page,
-            use_container_width=True
-        ):
-            st.session_state.page = page
-            st.rerun()
+def make_score(row):
+    # Conservative screening score. No unsupported historical/fundamental/news data is fabricated.
+    score=0; reasons=[]; coverage=[]
+    ch=row.get('percent_change',np.nan); vol=row.get('volume',np.nan); turnover=row.get('turnover',np.nan); ltp=row.get('ltp',np.nan); prev=row.get('previous_close',np.nan)
+    if pd.notna(ch):
+        coverage.append('दैनिक मूल्य परिवर्तन')
+        if ch>0: score+=15; reasons.append('आजको मूल्य सकारात्मक')
+        elif ch==0: score+=7
+    if pd.notna(vol) and vol>0: score+=8; coverage.append('Volume')
+    if pd.notna(turnover) and turnover>0: score+=7; coverage.append('Turnover')
+    if pd.notna(ltp) and pd.notna(prev) and prev>0:
+        if ltp>=prev: score+=5
+        coverage.append('Previous close तुलना')
+    # Remaining 65 points require verified history, financials and news, not available in this feed.
+    return score,reasons,coverage
 
-    st.divider()
-    st.caption("NEPSE market information platform")
-    st.caption("Public data source may be delayed.")
+if st.session_state.page=="Home":
+    st.markdown('<div class="section-heading">Explore NEPSE EDGE</div>',unsafe_allow_html=True)
+    for i in range(0,8,2):
+        a,b=st.columns(2,gap="small")
+        with a:
+            if st.button(PAGES[i],key=f"home{i}"): st.session_state.page=PAGES[i]
+        with b:
+            if st.button(PAGES[i+1],key=f"home{i+1}"): st.session_state.page=PAGES[i+1]
+    st.markdown("### Market Snapshot")
+    a,b=st.columns(2); a.metric("Total Turnover",get_summary("Total Turnover")); b.metric("Traded Shares",get_summary("Total Traded Shares"))
+    a,b=st.columns(2); a.metric("Transactions",get_summary("Total Transactions")); b.metric("Scrips Traded",get_summary("Total Scrips Traded"))
+    st.caption("डेटा सार्वजनिक YONEPSE mirror बाट आउँछ; बजार बन्दपछिको/ढिलो डाटा हुन सक्छ।")
+    if errors: st.warning("केही data endpoint उपलब्ध भएनन्: "+"; ".join(errors))
 
-# ============================================================
-# DATA LOAD
-# ============================================================
+elif st.session_state.page==PAGES[0]:
+    st.title("📊 Market Dashboard")
+    for x in indices if isinstance(indices,list) else []:
+        if str(x.get('index','')).lower()=='nepse index':
+            metric("NEPSE Index",fmt(x.get('currentValue',x.get('close'))),f"{fmt(x.get('perChange'))}%")
+    a,b,c=st.columns(3); a.metric("Turnover",get_summary("Total Turnover")); b.metric("Shares",get_summary("Total Traded Shares")); c.metric("Transactions",get_summary("Total Transactions"))
+    if indices: st.subheader("Market Indices"); st.dataframe(pd.DataFrame(indices),use_container_width=True,hide_index=True)
+    if not df.empty:
+        adv=int((df.get('change',pd.Series(dtype=float))>0).sum()); dec=int((df.get('change',pd.Series(dtype=float))<0).sum()); unchanged=int((df.get('change',pd.Series(dtype=float))==0).sum())
+        st.subheader("Market Breadth"); a,b,c=st.columns(3); a.metric("Advancers",adv); b.metric("Decliners",dec); c.metric("Unchanged",unchanged)
+        st.subheader("Top Movers")
+        x=df.sort_values('percent_change',ascending=False) if 'percent_change' in df else df
+        a,b=st.columns(2)
+        with a: st.write("Top Gainers"); st.dataframe(x.head(10),use_container_width=True,hide_index=True)
+        with b: st.write("Top Losers"); st.dataframe(x.tail(10).sort_values('percent_change'),use_container_width=True,hide_index=True)
+    else: st.error("Market price feed उपलब्ध छैन।")
 
-try:
-    market, equity = prepare_market()
-    indices = load_indices()
-    summary = load_summary()
-    top_data = load_top_stocks()
-    data_ok = True
-    data_error = ""
+elif st.session_state.page==PAGES[1]:
+    st.title("🔍 Stock Scanner")
+    q=st.text_input("कम्पनीको नाम वा Symbol खोज्नुहोस्")
+    view=df.copy()
+    if q and not view.empty:
+        view=view[view.astype(str).apply(lambda col:col.str.contains(q,case=False,na=False)).any(axis=1)]
+    if not view.empty:
+        cols=[c for c in ['symbol','companyName','sectorName','ltp','change','percent_change','volume','turnover'] if c in view]
+        st.write(f"कुल {len(view)} कम्पनी"); st.dataframe(view[cols].sort_values('turnover',ascending=False) if 'turnover' in cols else view[cols],use_container_width=True,hide_index=True)
+    else: st.info("खोजी नतिजा वा डाटा उपलब्ध छैन।")
 
-except Exception as error:
-    market = pd.DataFrame()
-    equity = pd.DataFrame()
-    indices = pd.DataFrame()
-    summary = pd.DataFrame()
-    top_data = {}
-    data_ok = False
-    data_error = str(error)
+elif st.session_state.page==PAGES[2]:
+    st.title("🏢 Sector Explorer")
+    if not df.empty and 'sectorName' in df:
+        sectors=sorted(df.sectorName.dropna().astype(str).unique())
+        sector=st.selectbox("Sector छान्नुहोस्",["All Sectors"]+sectors)
+        v=df if sector=="All Sectors" else df[df.sectorName.astype(str)==sector]
+        st.write(f"{sector}: {len(v)} कम्पनी")
+        st.dataframe(v,use_container_width=True,hide_index=True)
+    else: st.warning("Sector वर्गीकरण उपलब्ध छैन।")
 
-# ============================================================
-# HOME PAGE - ORIGINAL EIGHT SQUARE BOXES
-# ============================================================
+elif st.session_state.page==PAGES[3]:
+    st.title("📚 Fundamental Analysis")
+    sym=stock_picker("fund_stock")
+    if sym:
+        show_stock_overview(sym)
+        st.subheader("Fundamental Data")
+        st.info("हाल जडान भएको सार्वजनिक feed मा EPS, P/E, Net Profit, Book Value, Debt र quarterly report को प्रमाणित विवरण छैन। यी मानहरू अनुमान गरेर देखाइएको छैन। कम्पनीको आधिकारिक quarterly report वा NEPSE disclosure उपलब्ध गराएपछि मात्र ratios गणना गर्न सकिन्छ।")
+        st.write("Sector",(selected_row(sym).get('sectorName','—') if selected_row(sym) is not None else '—'))
 
-if st.session_state.page == "Home":
+elif st.session_state.page==PAGES[4]:
+    st.title("📈 Technical Analysis")
+    sym=stock_picker("technical_stock")
+    if sym:
+        show_stock_overview(sym)
+        st.subheader("Price Chart")
+        st.warning("हाल जोडिएको YONEPSE mirror मा verified daily OHLC historical candles उपलब्ध छैनन्। त्यसैले यहाँ नक्कली Candlestick, RSI वा MACD देखाइएको छैन।")
+        st.info("यो feed बाट हालको LTP मात्र उपलब्ध हुँदा सही RSI/MACD/EMA का लागि कम्तीमा 14–26+ दिनको ऐतिहासिक मूल्य शृङ्खला आवश्यक हुन्छ। ऐतिहासिक स्रोत जडान भएपछि चार्ट र indicators स्वतः सक्रिय हुनेछन्।")
+        r=selected_row(sym)
+        if r is not None:
+            st.subheader("Available Price Snapshot")
+            st.dataframe(pd.DataFrame([r]),use_container_width=True,hide_index=True)
 
-    st.markdown(
-        '<div class="section-heading">EXPLORE NEPSE</div>',
-        unsafe_allow_html=True
-    )
+elif st.session_state.page==PAGES[5]:
+    st.title("📰 News Intelligence")
+    st.info("यस संस्करणमा सार्वजनिक market feed मात्र जडान छ। छुट्टै विश्वसनीय समाचार API/NEPSE notice feed जडान नभएकाले समाचार शीर्षक बनावटी रूपमा देखाइएको छैन।")
+    sym=stock_picker("news_stock")
+    if sym:
+        st.subheader(f"{sym} — Company News")
+        st.warning("यस कम्पनीका प्रमाणित समाचार तथा disclosures को feed अझै जडान भएको छैन।")
+        st.caption("अर्को चरणमा स्रोत र प्रकाशित मितिसहित कम्पनीअनुसार समाचार जोडिनेछ।")
 
-    # Original two-column layout preserved
-    for i in range(0, len(pages), 2):
+elif st.session_state.page==PAGES[6]:
+    st.title("🧠 Smart Recommendations")
+    st.caption("Conservative preliminary screen • यो व्यक्तिगत लगानी सल्लाह होइन।")
+    n=st.select_slider("कति कम्पनी देखाउने?",options=[5,8,10,15,20,30],value=10)
+    if not df.empty:
+        scored=[]
+        for _,r in df.iterrows():
+            sc,why,cov=make_score(r); scored.append({"Symbol":r.get('symbol'),"Company":r.get('companyName',r.get('name','')),"Score / 100":sc,"Preliminary Signal":"WATCH — insufficient verified data","Reasons":", ".join(why) or "पर्याप्त सकारात्मक संकेत छैन","Available data":", ".join(cov)})
+        rec=pd.DataFrame(scored).sort_values('Score / 100',ascending=False).head(n)
+        st.dataframe(rec,use_container_width=True,hide_index=True)
+        st.error("महत्त्वपूर्ण: अहिलेको feed मा ऐतिहासिक indicators, audited fundamentals र verified news समावेश छैनन्। त्यसैले कुनै कम्पनीलाई Strong Buy भनेर सिफारिस गरिएको छैन। हालका स्कोर पूर्ण 100-point recommendation होइनन्।")
+        st.caption("अन्तिम recommendation engine का लागि historical OHLC, quarterly financials र dated company news जोडेर backtest गर्नुपर्छ।")
+    else: st.warning("Market data उपलब्ध छैन।")
 
-        left, right = st.columns(2, gap="small")
-
-        for col, item in zip(
-            [left, right],
-            pages[i:i+2]
-        ):
-
-            label, page = item
-
-            with col:
-                if st.button(
-                    label,
-                    key="home_" + page,
-                    use_container_width=True
-                ):
-                    st.session_state.page = page
-                    st.rerun()
-
-    # Market snapshot below original boxes
-    st.divider()
-
-    st.markdown("### MARKET SNAPSHOT")
-
-    if data_ok:
-
-        nepse = get_index(indices, "NEPSE Index")
-
-        turnover = summary_value(summary, "Total Turnover")
-        volume = summary_value(summary, "Total Traded Shares")
-        transactions = summary_value(summary, "Total Transactions")
-
-        if nepse is not None:
-
-            a, b, c = st.columns(3)
-
-            a.metric(
-                "NEPSE INDEX",
-                fmt(nepse.get("close")),
-                f"{safe_num(nepse.get('perChange')):.2f}%"
-            )
-
-            b.metric(
-                "TURNOVER",
-                money(turnover) if turnover is not None else "N/A"
-            )
-
-            c.metric(
-                "SHARES TRADED",
-                compact(volume) if volume is not None else "N/A"
-            )
-
-            d, e, f = st.columns(3)
-
-            d.metric(
-                "TRANSACTIONS",
-                compact(transactions) if transactions is not None else "N/A"
-            )
-
-            e.metric("LISTED EQUITIES", len(equity))
-
-            f.metric("MARKET INDICES", len(indices))
-
-        else:
-            st.info("NEPSE index data is unavailable.")
-
+elif st.session_state.page==PAGES[7]:
+    st.title("💼 Watchlist & Portfolio")
+    st.subheader("Watchlist")
+    sym=stock_picker("watch_stock")
+    if sym and st.button("＋ Add to Watchlist"):
+        if sym not in st.session_state.watch: st.session_state.watch.append(sym)
+    if st.session_state.watch: st.write(", ".join(st.session_state.watch))
+    st.divider(); st.subheader("Buy / Sell Portfolio")
+    user_id=portfolio_login()
+    if user_id:
+        with st.form("transaction_form"):
+            symbol=st.selectbox("Company",symbols if symbols else ["No data"])
+            typ=st.selectbox("Transaction",["BUY","SELL"])
+            qty=st.number_input("Quantity",min_value=1,step=1)
+            price=st.number_input("Price per share (Rs.)",min_value=0.01,step=0.5)
+            txdate=st.date_input("Transaction date",value=date.today())
+            notes=st.text_input("Notes (optional)")
+            submitted=st.form_submit_button("Save Transaction")
+            if submitted:
+                try:
+                    current=get_transactions(user_id)
+                    net=sum(int(t["quantity"]) if t["transaction_type"]=="BUY" else -int(t["quantity"]) for t in current if t["symbol"]==symbol)
+                    if typ=="SELL" and qty>net: st.error(f"Sell quantity बढी भयो। हाल {net} कित्ता मात्र बाँकी छ।")
+                    else:
+                        sb.table("portfolio_transactions").insert({"user_id":user_id,"symbol":symbol,"transaction_type":typ,"quantity":int(qty),"price":float(price),"transaction_date":str(txdate),"notes":notes}).execute()
+                        st.success("Transaction cloud database मा सुरक्षित भयो।"); st.rerun()
+                except Exception as e: st.error(f"Save गर्न सकिएन: {e}")
+        tx=get_transactions(user_id)
+        if tx:
+            tdf=pd.DataFrame(tx)
+            st.subheader("Transaction History")
+            st.dataframe(tdf,use_container_width=True,hide_index=True)
+            st.subheader("Holdings")
+            holdings=[]
+            for s in sorted(tdf.symbol.unique()):
+                part=tdf[tdf.symbol==s]
+                buys=part[part.transaction_type=="BUY"]; sells=part[part.transaction_type=="SELL"]
+                bought=int(buys.quantity.sum()); sold=int(sells.quantity.sum()); balance=bought-sold
+                avg=float((buys.quantity*buys.price).sum()/bought) if bought else 0
+                current=selected_row(s); ltp=float(current.get("ltp")) if current is not None and pd.notna(current.get("ltp")) else np.nan
+                holdings.append({"Symbol":s,"Bought":bought,"Sold":sold,"Balance":balance,"Avg Buy Price":round(avg,2),"LTP":ltp,"Unrealized P/L":round((ltp-avg)*balance,2) if pd.notna(ltp) else None})
+            st.dataframe(pd.DataFrame(holdings),use_container_width=True,hide_index=True)
+        else: st.info("अहिलेसम्म कारोबार थपिएको छैन।")
     else:
-        st.warning("Market data could not be loaded.")
+        st.info("पहिले email OTP verify गरेपछि Buy/Sell रेकर्ड थप्न र सुरक्षित राख्न सक्नुहुन्छ।")
 
-# ============================================================
-# MARKET DASHBOARD
-# ============================================================
-
-elif st.session_state.page == "Market Dashboard":
-
-    back_home()
-
-    st.title("📊 MARKET DASHBOARD")
-    st.caption("Complete Nepal Stock Market Overview")
-
-    if not data_ok:
-        st.error("Market data unavailable.")
-        st.code(data_error)
-        st.stop()
-
-    # Refresh control
-    if st.button("🔄 REFRESH MARKET DATA", key="refresh_market"):
-        st.cache_data.clear()
-        st.rerun()
-
-    # Main NEPSE index
-    st.markdown("## NEPSE INDEX")
-
-    nepse = get_index(indices, "NEPSE Index")
-
-    if nepse is not None:
-
-        a, b, c, d = st.columns(4)
-
-        a.metric(
-            "NEPSE",
-            fmt(nepse.get("close")),
-            f"{safe_num(nepse.get('perChange')):.2f}%"
-        )
-
-        b.metric("POINT CHANGE", fmt(nepse.get("change")))
-        c.metric("DAY HIGH", fmt(nepse.get("high")))
-        d.metric("DAY LOW", fmt(nepse.get("low")))
-
-        e, f = st.columns(2)
-
-        e.metric("52 WEEK HIGH", fmt(nepse.get("fiftyTwoWeekHigh")))
-        f.metric("52 WEEK LOW", fmt(nepse.get("fiftyTwoWeekLow")))
-
-    else:
-        st.warning("NEPSE index is unavailable.")
-
-    # All indices
-    st.divider()
-    st.markdown("## ALL MARKET INDICES")
-
-    show_table(
-        indices,
-        [
-            "index", "close", "change",
-            "perChange", "high", "low",
-            "fiftyTwoWeekHigh", "fiftyTwoWeekLow"
-        ]
-    )
-
-    # Market summary
-    st.divider()
-    st.markdown("## MARKET SUMMARY")
-
-    turnover = summary_value(summary, "Total Turnover")
-    volume = summary_value(summary, "Total Traded Shares")
-    transactions = summary_value(summary, "Total Transactions")
-    scrips = summary_value(summary, "Total Scrips Traded")
-    market_cap = summary_value(summary, "Total Market Capitalization")
-    float_cap = summary_value(summary, "Total Float Market Capitalization")
-
-    a, b, c = st.columns(3)
-
-    a.metric("TOTAL TURNOVER", money(turnover) if turnover is not None else "N/A")
-    b.metric("SHARES TRADED", compact(volume) if volume is not None else "N/A")
-    c.metric("TRANSACTIONS", compact(transactions) if transactions is not None else "N/A")
-
-    d, e, f = st.columns(3)
-
-    d.metric("SCRIPS TRADED", compact(scrips) if scrips is not None else "N/A")
-    e.metric("MARKET CAPITALIZATION", money(market_cap) if market_cap is not None else "N/A")
-    f.metric("FLOAT MARKET CAP", money(float_cap) if float_cap is not None else "N/A")
-
-    # Market breadth
-    st.divider()
-    st.markdown("## MARKET BREADTH")
-
-    changes = pd.to_numeric(
-        equity["percent_change"], errors="coerce"
-    )
-
-    advancing = int((changes > 0).sum())
-    declining = int((changes < 0).sum())
-    unchanged = int((changes == 0).sum())
-    missing = int(changes.isna().sum())
-
-    a, b, c, d = st.columns(4)
-
-    a.metric("🟢 ADVANCING", advancing)
-    b.metric("🔴 DECLINING", declining)
-    c.metric("⚪ UNCHANGED", unchanged)
-    d.metric("NO DATA", missing)
-
-    breadth = pd.DataFrame({
-        "Market Movement": ["Advancing", "Declining", "Unchanged"],
-        "Companies": [advancing, declining, unchanged]
-    }).set_index("Market Movement")
-
-    st.bar_chart(breadth)
-
-    if advancing > declining:
-        st.success("Market breadth is positive.")
-    elif declining > advancing:
-        st.warning("Market breadth is negative.")
-    else:
-        st.info("Market breadth is balanced.")
-
-    # Top gainers and losers
-    st.divider()
-    st.markdown("## TOP GAINERS & LOSERS")
-
-    equity_symbols = set(equity["symbol"].astype(str))
-
-    gainers = pd.DataFrame(top_data.get("top_gainer", []))
-    losers = pd.DataFrame(top_data.get("top_loser", []))
-
-    if not gainers.empty and "symbol" in gainers.columns:
-        gainers = gainers[
-            gainers["symbol"].astype(str).isin(equity_symbols)
-        ]
-
-    if not losers.empty and "symbol" in losers.columns:
-        losers = losers[
-            losers["symbol"].astype(str).isin(equity_symbols)
-        ]
-
-    left, right = st.columns(2)
-
-    with left:
-        st.markdown("### 🟢 TOP GAINERS")
-        show_table(
-            gainers.head(10),
-            ["symbol", "securityName", "ltp", "pointChange", "percentageChange"]
-        )
-
-    with right:
-        st.markdown("### 🔴 TOP LOSERS")
-        show_table(
-            losers.head(10),
-            ["symbol", "securityName", "ltp", "pointChange", "percentageChange"]
-        )
-
-    # Turnover leaders
-    st.divider()
-    st.markdown("## TOP TURNOVER")
-
-    turnover_df = pd.DataFrame(top_data.get("top_turnover", []))
-
-    if not turnover_df.empty:
-        turnover_df = turnover_df[
-            turnover_df["symbol"].astype(str).isin(equity_symbols)
-        ]
-
-    show_table(
-        turnover_df.head(15),
-        ["symbol", "securityName", "closingPrice", "turnover"]
-    )
-
-    # Volume leaders
-    st.divider()
-    st.markdown("## TOP VOLUME")
-
-    volume_df = equity.sort_values(
-        "volume", ascending=False
-    ).head(15)
-
-    show_table(
-        volume_df,
-        ["symbol", "name", "ltp", "percent_change", "volume", "turnover"]
-    )
-
-    # Sector performance
-    st.divider()
-    st.markdown("## SECTOR PERFORMANCE")
-
-    sector_data = equity.copy()
-
-    sector_data["percent_change"] = pd.to_numeric(
-        sector_data["percent_change"], errors="coerce"
-    )
-
-    sector_data["turnover"] = pd.to_numeric(
-        sector_data["turnover"], errors="coerce"
-    )
-
-    sector_summary = (
-        sector_data.groupby("sectorName")
-        .agg(
-            Companies=("symbol", "count"),
-            Average_Change=("percent_change", "mean"),
-            Total_Turnover=("turnover", "sum")
-        )
-        .reset_index()
-        .rename(columns={
-            "sectorName": "Sector",
-            "Average_Change": "Average Change (%)",
-            "Total_Turnover": "Total Turnover"
-        })
-        .sort_values("Average Change (%)", ascending=False)
-    )
-
-    show_table(
-        sector_summary,
-        ["Sector", "Companies", "Average Change (%)", "Total Turnover"]
-    )
-
-    if not sector_summary.empty:
-        chart = sector_summary.set_index("Sector")[
-            ["Average Change (%)"]
-        ]
-        st.bar_chart(chart)
-
-    # Full market table
-    st.divider()
-    st.markdown("## COMPLETE MARKET STOCK LIST")
-
-    search = st.text_input(
-        "Search company name or symbol",
-        placeholder="Example: NABIL, NHPC, PHCL"
-    )
-
-    stock_table = equity.copy()
-
-    if search:
-        stock_table = stock_table[
-            stock_table["symbol"].astype(str).str.contains(
-                search, case=False, na=False
-            )
-            |
-            stock_table["name"].astype(str).str.contains(
-                search, case=False, na=False
-            )
-        ]
-
-    st.caption(f"{len(stock_table)} companies found")
-
-    show_table(
-        stock_table,
-        [
-            "symbol", "name", "sectorName", "ltp",
-            "change", "percent_change", "high",
-            "low", "volume", "turnover", "trades"
-        ],
-        height=500
-    )
-
-    st.caption("Data timestamp: " + market_timestamp(market, indices))
-    st.caption("Source: YONEPSE public data mirror. Not official NEPSE live data.")
-
-# ============================================================
-# STOCK SCANNER
-# ============================================================
-
-elif st.session_state.page == "Stock Scanner":
-
-    back_home()
-    st.title("🔍 STOCK SCANNER")
-    st.caption("Search and filter listed equity companies")
-
-    if not data_ok:
-        st.error("Market data unavailable.")
-        st.stop()
-
-    df = equity.copy()
-
-    search = st.text_input("Search by company name or symbol")
-
-    sectors = sorted(df["sectorName"].dropna().astype(str).unique())
-
-    a, b = st.columns(2)
-
-    with a:
-        sector = st.selectbox("Select Sector", ["All Sectors"] + sectors)
-
-    with b:
-        movement = st.selectbox(
-            "Price Movement",
-            ["All", "Gainers", "Losers", "Unchanged"]
-        )
-
-    if sector != "All Sectors":
-        df = df[df["sectorName"] == sector]
-
-    if search:
-        df = df[
-            df["symbol"].astype(str).str.contains(
-                search, case=False, na=False
-            )
-            |
-            df["name"].astype(str).str.contains(
-                search, case=False, na=False
-            )
-        ]
-
-    if movement == "Gainers":
-        df = df[df["percent_change"] > 0]
-    elif movement == "Losers":
-        df = df[df["percent_change"] < 0]
-    elif movement == "Unchanged":
-        df = df[df["percent_change"] == 0]
-
-    st.subheader(f"RESULTS: {len(df)} COMPANIES")
-
-    show_table(
-        df,
-        [
-            "symbol", "name", "sectorName",
-            "ltp", "change", "percent_change",
-            "volume", "turnover"
-        ],
-        height=500
-    )
-
-    st.divider()
-    st.markdown("## COMPANY QUICK VIEW")
-    company_details(df, "scanner_company")
-
-# ============================================================
-# SECTOR EXPLORER
-# ============================================================
-
-elif st.session_state.page == "Sector Explorer":
-
-    back_home()
-    st.title("🏢 SECTOR EXPLORER")
-
-    if not data_ok:
-        st.error("Market data unavailable.")
-        st.stop()
-
-    df = equity.copy()
-
-    sectors = sorted(df["sectorName"].dropna().astype(str).unique())
-
-    sector = st.selectbox(
-        "SELECT SECTOR",
-        ["All Sectors"] + sectors
-    )
-
-    search = st.text_input("Search company inside sector")
-
-    if sector != "All Sectors":
-        df = df[df["sectorName"] == sector]
-
-    if search:
-        df = df[
-            df["symbol"].astype(str).str.contains(
-                search, case=False, na=False
-            )
-            |
-            df["name"].astype(str).str.contains(
-                search, case=False, na=False
-            )
-        ]
-
-    st.markdown(f"### {sector} | {len(df)} COMPANIES")
-
-    a, b, c = st.columns(3)
-
-    a.metric("COMPANIES", len(df))
-
-    b.metric(
-        "AVERAGE CHANGE",
-        f"{safe_num(df['percent_change'].mean()):.2f}%"
-        if not df.empty else "N/A"
-    )
-
-    c.metric(
-        "TOTAL TURNOVER",
-        money(df["turnover"].sum())
-        if not df.empty else "N/A"
-    )
-
-    show_table(
-        df,
-        [
-            "symbol", "name", "ltp",
-            "percent_change", "volume", "turnover"
-        ],
-        height=450
-    )
-
-    st.divider()
-    st.markdown("## SELECT COMPANY")
-    company_details(df, "sector_company")
-
-# ============================================================
-# FUNDAMENTAL ANALYSIS
-# ============================================================
-
-elif st.session_state.page == "Fundamental Analysis":
-
-    back_home()
-    st.title("📚 FUNDAMENTAL ANALYSIS")
-
-    st.markdown("### COMPANY FINANCIAL HEALTH")
-
-    if data_ok:
-        company_details(equity, "fundamental_company")
-
-    st.divider()
-
-    st.markdown("""
-    **Financial analysis sections**
-
-    - Earnings Per Share (EPS)
-    - Price to Earnings Ratio (P/E)
-    - Book Value Per Share
-    - Net Worth
-    - Quarterly Profit and Loss
-    - Annual Financial Statements
-    - Debt and Interest Analysis
-    - Dividend History
-    - Profit Growth
-    - Company Valuation
-    """)
-
-    st.info(
-        "Financial statement data integration is pending. "
-        "Only verified financial figures will be displayed."
-    )
-
-# ============================================================
-# TECHNICAL ANALYSIS
-# ============================================================
-
-elif st.session_state.page == "Technical Analysis":
-
-    back_home()
-    st.title("📈 TECHNICAL ANALYSIS")
-
-    if data_ok:
-        company_details(equity, "technical_company")
-
-    st.divider()
-
-    st.markdown("""
-    **Technical analysis sections**
-
-    - Candlestick Chart
-    - RSI (14)
-    - MACD
-    - EMA 20 / 50 / 200
-    - Bollinger Bands
-    - ADX and Stochastic
-    - Volume Analysis
-    - Support and Resistance
-    - Trend Analysis
-    - Breakout Detection
-    """)
-
-    st.info(
-        "Historical OHLC data integration is required "
-        "before calculating technical indicators."
-    )
-
-# ============================================================
-# NEWS INTELLIGENCE
-# ============================================================
-
-elif st.session_state.page == "News Intelligence":
-
-    back_home()
-    st.title("📰 NEWS INTELLIGENCE")
-
-    st.markdown("""
-    **News monitoring categories**
-
-    - Company Announcements
-    - Quarterly Financial Reports
-    - Dividend and Bonus Shares
-    - Right Share Announcements
-    - AGM and Book Closure
-    - Project Updates
-    - NEPSE Notices
-    - SEBON Notices
-    - Positive / Negative / Neutral News Impact
-    """)
-
-    st.info(
-        "Verified news source integration will be added "
-        "before publishing company news or impact ratings."
-    )
-
-# ============================================================
-# SMART RECOMMENDATIONS
-# ============================================================
-
-elif st.session_state.page == "Smart Recommendations":
-
-    back_home()
-    st.title("🧠 SMART RECOMMENDATIONS")
-
-    st.markdown("### NEPSE OPPORTUNITY DISCOVERY")
-
-    st.write(
-        "Select a sector to explore companies for further analysis."
-    )
-
-    if data_ok:
-
-        sectors = sorted(
-            equity["sectorName"].dropna().astype(str).unique()
-        )
-
-        selected_sector = st.selectbox(
-            "SELECT SECTOR",
-            ["All Sectors"] + sectors,
-            key="recommend_sector"
-        )
-
-        candidates = equity.copy()
-
-        if selected_sector != "All Sectors":
-            candidates = candidates[
-                candidates["sectorName"] == selected_sector
-            ]
-
-        candidates = candidates.sort_values(
-            "percent_change", ascending=False
-        )
-
-        show_table(
-            candidates.head(20),
-            [
-                "symbol", "name", "sectorName",
-                "ltp", "percent_change", "volume", "turnover"
-            ]
-        )
-
-    st.divider()
-
-    st.markdown("""
-    **Recommendation engine will combine:**
-
-    1. Fundamental strength
-    2. Technical indicators
-    3. Price action and volume
-    4. Sector performance
-    5. Overall NEPSE trend
-    6. Company news and reports
-    7. Breakout and false-breakout risk
-    8. Risk and reward assessment
-    """)
-
-    st.warning(
-        "This is currently a market discovery list, not a verified "
-        "buy/sell recommendation engine. Scoring will be activated "
-        "after reliable historical and fundamental data is connected."
-    )
-
-# ============================================================
-# WATCHLIST & PORTFOLIO
-# ============================================================
-
-elif st.session_state.page == "Watchlist & Portfolio":
-
-    back_home()
-    st.title("💼 WATCHLIST & PORTFOLIO")
-
-    st.markdown("### PERSONAL STOCK TRACKER")
-
-    if data_ok:
-
-        options = equity["symbol"].astype(str).tolist()
-
-        selected = st.selectbox(
-            "Select a company",
-            options,
-            key="portfolio_company"
-        )
-
-        company = equity[
-            equity["symbol"].astype(str) == selected
-        ].iloc[0]
-
-        ltp = safe_num(company.get("ltp"))
-
-        quantity = st.number_input(
-            "Quantity",
-            min_value=1,
-            value=100,
-            step=1
-        )
-
-        buy_price = st.number_input(
-            "Average Purchase Price",
-            min_value=0.0,
-            value=float(ltp),
-            step=1.0
-        )
-
-        investment = quantity * buy_price
-        current_value = quantity * ltp
-        profit_loss = current_value - investment
-
-        a, b, c = st.columns(3)
-
-        a.metric("INVESTMENT", money(investment))
-        b.metric("CURRENT VALUE", money(current_value))
-        c.metric("PROFIT / LOSS", money(profit_loss))
-
-        st.caption(
-            "This is a temporary calculator. "
-            "Persistent portfolio saving will be added later."
-        )
-
-    st.divider()
-
-    st.info(
-        "Future features: saved watchlists, multiple holdings, "
-        "average cost, realized profit, unrealized profit and "
-        "portfolio diversification."
-    )
-
-# ============================================================
-# FOOTER - ORIGINAL STYLE
-# ============================================================
-
-st.markdown("""
-<div class="edge-footer">
-    NEPSE EDGE © 2026<br>
-    INDEPENDENT STOCK MARKET INTELLIGENCE PLATFORM
-</div>
-""", unsafe_allow_html=True)
+st.markdown('<div class="edge-footer">NEPSE EDGE © 2026<br/>INDEPENDENT STOCK MARKET INTELLIGENCE PLATFORM</div>',unsafe_allow_html=True)
