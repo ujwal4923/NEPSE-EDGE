@@ -269,3 +269,44 @@ if "df" in globals() and not df.empty:
         st.info("Change percentage data is not available.")
 
     st.caption("Based on available market data. Security classification may be incomplete.")
+
+
+# NEPSE INDEX DASHBOARD
+try:
+    index_data = get_data("market/indices.json")
+
+    st.divider()
+    st.header("📊 NEPSE Index Dashboard")
+
+    if index_data:
+        index_df = pd.DataFrame(index_data)
+
+        for _, item in index_df.iterrows():
+            st.subheader(item.get("index", "Market Index"))
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Current Value",
+                round(float(item.get("close", 0)), 2),
+                round(float(item.get("change", 0)), 2)
+            )
+
+            col2.metric(
+                "Change %",
+                f'{float(item.get("perChange", 0)):.2f}%'
+            )
+
+            col3.metric(
+                "Previous Close",
+                round(float(item.get("previousClose", 0)), 2)
+            )
+
+            st.caption(
+                f'Updated: {item.get("generatedTime", "Not available")}'
+            )
+    else:
+        st.warning("Index data is currently unavailable.")
+
+except Exception as e:
+    st.warning("NEPSE Index data is temporarily unavailable.")
