@@ -385,4 +385,191 @@ try:
 except Exception as e:
     st.warning("Unable to load Sector Analysis.")
     st.write("Technical details:", str(e))
+
+
+
+# FUNDAMENTAL ANALYSIS & SECTOR EXPLORER
+try:
+    st.divider()
+    st.header("📊 Fundamental Analysis & Company Explorer")
+
+    # Load sector and financial datasets
+    sector_data = get_data("other/sector_codes.json")
+    financial_data = get_data("company/financials.json")
+
+    # Prepare company master list
+    company_master = df.copy()
+    company_master["symbol"] = company_master["symbol"].astype(str)
+
+    if "name" not in company_master.columns:
+        company_master["name"] = company_master["symbol"]
+
+    # Build symbol-to-sector mapping
+    sector_lookup = {}
+
+    if isinstance(sector_data, dict):
+        for sector_name, members in sector_data.items():
+            if isinstance(members, list):
+                for member in members:
+                    if isinstance(member, dict) and member.get("symbol"):
+                        sector_lookup[str(member["symbol"])] = sector_name
+
+    company_master["Sector"] = company_master["symbol"].map(
+        sector_lookup
+    ).fillna("Unclassified")
+
+    # Sector selection
+    sector_options = ["All Sectors"] + sorted(
+        company_master["Sector"].unique().tolist()
+    )
+
+    selected_sector = st.selectbox(
+        "Select Sector",
+        sector_options,
+        key="fund_sector"
+    )
+
+    # Company search
+    search_text = st.text_input(
+        "🔍 Search Company or Symbol",
+        placeholder="Example: NABIL, NGPL, Hydropower",
+        key="fund_search"
+    )
+
+    filtered_companies = company_master.copy()
+
+    if selected_sector != "All Sectors":
+        filtered_companies = filtered_companies[
+            filtered_companies["Sector"] == selected_sector
+        ]
+
+    if search_text.strip():
+        search_mask = (
+            filtered_companies["symbol"].str.contains(
+                search_text, case=False, na=False, regex=False
+            )
+            |
+            filtered_companies["name"].astype(str).str.contains(
+                search_text, case=False, na=False, regex=False
+            )
+        )
+        filtered_companies = filtered_companies[search_mask]
+
+    st.write("Companies found:", len(filtered_companies))
+
+    display_columns = [
+        col for col in [
+            "symbol", "name", "Sector", "ltp",
+            "percent_change", "volume", "turnover"
+        ] if col in filtered_companies.columns
+    ]
+
+    st.dataframe(
+        filtered_companies[display_columns],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # Select individual company
+    if not filtered_companies.empty:
+        company_options = filtered_companies["symbol"].tolist()
+
+        selected_symbol = st.selectbox(
+            "Select Company for Fundamental Analysis",
+            company_options,
+            key="fund_company"
+        )
+
+        selected_company = filtered_companies[
+            filtered_companies["symbol"] == selected_symbol
+        ].iloc[0]
+
+        st.subheader(
+            str(selected_company["name"]) + " (" + selected_symbol + ")"
+        )
+
+        if "ltp" in selected_company.index:
+            st.metric("Latest Market Price", selected_company["ltp"])
+
+        # Find company financial reports
+        company_reports = []
+
+        if isinstance(financial_data, list):
+            for company in financial_data:
+                if (
+                    isinstance(company, dict)
+                    and str(company.get("symbol", "")).upper()
+                    == selected_symbol.upper()
+                ):
+                    company_reports = company.get("reports", [])
+                    break
+
+        if company_reports:
+            report_labels = [
+                str(r.get("fy", "Unknown FY")) + " | "
+                + str(r.get("quarter", "Report"))
+                + " | " + str(r.get("type", ""))
+                for r in company_reports
+            ]
+
+            report_choice = st.selectbox(
+                "Select Financial Report",
+                range(len(company_reports)),
+                format_func=lambda i: report_labels[i],
+                key="fund_report"
+            )
+
+            report = company_reports[report_choice]
+
+            st.subheader("Financial Indicators")
+
+            def show_financial_metric(column, label, field, fmt):
+                value = report.get(field)
+                if value is not None:
+                    try:
+                        number = float(value)
+                        column.metric(label, fmt.format(number))
+                    except (ValueError, TypeError):
+                        column.metric(label, "Not available")
+                else:
+                    column.metric(label, "Not available")
+
+            c1, c2, c3 = st.columns(3)
+
+            show_financial_metric(c1, "EPS", "eps", "{:.2f}")
+            show_financial_metric(c2, "P/E Ratio", "pe", "{:.2f}")
+            show_financial_metric(c3, "Net Worth / Share",
+                                  "net_worth_per_share", "{:.2f}")
+
+            c4, c5 = st.columns(2)
+
+            show_financial_metric(c4, "Net Profit (Rs.)",
+                                  "profit", "{:,.0f}")
+            show_financial_metric(c5, "Paid-up Capital (Rs.)",
+                                  "paid_up_capital", "{:,.0f}")
+
+            st.subheader("Available Financial Reports")
+            st.dataframe(
+                pd.DataFrame(company_reports),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        else:
+            st.info(
+                "Financial reports are not available for this company "
+                "in the current data source."
+            )
+
+        st.caption(
+            "Financial figures are based on available published reports. "
+            "Check report period before making investment decisions."
+        )
+
+    else:
+        st.info("No companies match your search.")
+
+except Exception as e:
+    st.warning("Fundamental Analysis is temporarily unavailable.")
+    st.caption("Please check the data source and try again.")
     
